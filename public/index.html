@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <style>
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            max-width: 100%;
+            overflow-x: hidden;
+            direction: auto;
+        }
+        .message {
+            max-width: 75%;
+            margin-bottom: 1rem;
+        }
+        .my-message {
+            margin-left: auto;
+            background-color: #dcf8c6;
+        }
+        .other-message {
+            margin-right: auto;
+            background-color: #fff;
+        }
+        .message-text {
+            padding: 0.5rem 1rem;
+            border-radius: 0.8rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .username {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex flex-col h-screen">
+        <div id="messages" class="overflow-auto p-4 flex-grow message-container">
+            <!-- Messages will be appended here -->
+        </div>
+        <form id="form" class="border-t-2 border-gray-200 px-4 py-3 sm:px-6 flex items-center gap-4">
+            <input dir="auto" id="input" type="text" autocomplete="off" placeholder="Type a message..."
+                class="flex-grow bg-gray-200 rounded-full py-2 px-4 outline-none focus:bg-white" />
+            <label for="imageUpload" class="cursor-pointer">
+                <i class="fas fa-image text-xl text-gray-600"></i>
+                <input id="imageUpload" type="file" class="hidden" accept="image/*">
+            </label>
+            <button id="submit" type="submit"
+                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full transition duration-300 ease-in-out transform hover:-translate-y-1">
+                Send
+            </button>
+        </form>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var socket = io();
+            var username = localStorage.getItem('username');
+
+            if (!username) {
+                username = prompt('What is your name?');
+                localStorage.setItem('username', username);
+            }
+
+            // Function to append messages to the messages container
+            const appendMessages = (messages) => {
+                messages.forEach((data) => {
+                    var messageClass = data.username === username ? 'my-message' : 'other-message';
+                    var messageElement = document.createElement('div');
+                    messageElement.classList.add('message', messageClass);
+
+                    var usernameElement = document.createElement('div');
+                    usernameElement.classList.add('username');
+                    usernameElement.textContent = data.username;
+
+                    if (data.text) {
+                        var textElement = document.createElement('div');
+                        textElement.classList.add('message-text');
+                        textElement.setAttribute('dir', 'auto');
+                        textElement.textContent = data.text;
+                        messageElement.appendChild(textElement);
+                    } else if (data.image) {
+                        var img = document.createElement('img');
+                        img.setAttribute('src', data.image);
+                        img.classList.add('max-w-full', 'h-auto', 'rounded', 'cursor-pointer');
+
+                        // Add click event to the image for opening in a new tab with confirmation
+                        img.addEventListener('click', function () {
+                            if (confirm('Do you want to open this image in a new tab?')) {
+                                window.open(data.image, '_blank');
+                            }
+                        });
+
+                        messageElement.appendChild(img);
+                    }
+
+                    messageElement.appendChild(usernameElement);
+                    document.getElementById('messages').appendChild(messageElement);
+                });
+                window.scrollTo(0, document.body.scrollHeight);
+            };
+
+            // Listen for the 'load messages' event from the server
+            socket.on('load messages', (messages) => {
+                appendMessages(messages);
+            });
+
+            document.getElementById('form').addEventListener('submit', function (e) {
+                e.preventDefault();
+                var message = document.getElementById('input').value;
+                if (message.trim()) {
+                    socket.emit('chat message', { username: username, text: message });
+                    document.getElementById('input').value = '';
+                }
+                return false;
+            });
+
+            document.getElementById('imageUpload').addEventListener('change', function () {
+                var file = this.files[0];
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    socket.emit('image', { username: username, image: e.target.result });
+                };
+                reader.readAsDataURL(file);
+                this.value = '';
+            });
+
+            socket.on('chat message', function (data) {
+                appendMessages([data]);
+            });
+
+            socket.on('image', function (data) {
+                appendMessages([data]);
+            });
+        });
+    </script>
+</body>
+
+</html>
